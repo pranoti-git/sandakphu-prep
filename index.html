@@ -558,7 +558,7 @@ function initRemote(){
   setStatus('connecting');
   ref = db.collection('trackers').doc(tid);
   offlineTimer = setTimeout(function(){ if (!definitive) setStatus('offline'); }, 15000);
-  ref.onSnapshot(function(snap){
+  ref.onSnapshot({includeMetadataChanges:true}, function(snap){
     var fromCache = snap.metadata && snap.metadata.fromCache;
     if (!fromCache){ definitive = true; clearTimeout(offlineTimer); }
     if (snap.exists){
