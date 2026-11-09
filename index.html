@@ -552,11 +552,12 @@ function initRemote(){
   try {
     window.firebase.initializeApp(cfg);
     db = window.firebase.firestore();
+    try { db.settings({experimentalForceLongPolling:true, merge:true}); } catch (e) {}
     try { db.enablePersistence({synchronizeTabs:true}).catch(function(){}); } catch (e) {}
   } catch (e) { setStatus('local'); return; }
   setStatus('connecting');
   ref = db.collection('trackers').doc(tid);
-  offlineTimer = setTimeout(function(){ if (!definitive) setStatus('offline'); }, 10000);
+  offlineTimer = setTimeout(function(){ if (!definitive) setStatus('offline'); }, 15000);
   ref.onSnapshot(function(snap){
     var fromCache = snap.metadata && snap.metadata.fromCache;
     if (!fromCache){ definitive = true; clearTimeout(offlineTimer); }
