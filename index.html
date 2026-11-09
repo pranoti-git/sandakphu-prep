@@ -1,0 +1,790 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Sandakphu Prep"><meta name="theme-color" content="#1D5C4E"><title>Sandakphu Prep</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+</head><body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single-column trail log. Summary and long-day ladder on top, week chips, then four session cards for the chosen week. Spruce green and ridge orange come from the Singalila forest and ridge. */
+:root{
+  --bg:#EDF2EF;
+  --surface:#FAFCFB;
+  --surface2:#DFE8E4;
+  --fg:#12201B;
+  --muted:#4F625B;
+  --line:#C6D3CD;
+  --accent:#1D5C4E;
+  --accent-fg:#FFFFFF;
+  --mark:#B24E17;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --font-body:'Source Sans 3',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1613;
+    --surface:#15201C;
+    --surface2:#1E2D28;
+    --fg:#E6EFEB;
+    --muted:#9DB2AA;
+    --line:#2B3C36;
+    --accent:#5CBFA3;
+    --accent-fg:#06130F;
+    --mark:#F2975C;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1613;
+  --surface:#15201C;
+  --surface2:#1E2D28;
+  --fg:#E6EFEB;
+  --muted:#9DB2AA;
+  --line:#2B3C36;
+  --accent:#5CBFA3;
+  --accent-fg:#06130F;
+  --mark:#F2975C;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.45;
+  padding-block:20px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:760px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:20px;min-width:0}.wrap>*{min-width:0}html,body{overflow-x:hidden}
+.titlebar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.eyebrow{margin:0 0 2px;font:500 12px/1.2 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{margin:0;font:700 clamp(38px,9vw,56px)/.95 var(--font-display);letter-spacing:.005em;text-wrap:balance}
+.authbox{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.status{margin:0;font:400 12px/1.3 var(--font-mono);color:var(--muted);display:flex;align-items:center;gap:6px;max-width:100%}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.status.ok::before{background:var(--accent)}
+.status.warn::before{background:var(--mark)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.summary{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:560px){.summary{grid-template-columns:minmax(0,1fr)}}
+.big{font:700 54px/1 var(--font-display)}
+.big span{font-size:26px;color:var(--muted);font-weight:500}
+.plabel{margin:2px 0 10px;color:var(--muted);font-size:14px}
+.bar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.chartbox{min-width:0}
+.charttitle{margin:0 0 6px;font:600 13px/1.3 var(--font-body);color:var(--fg)}
+.chartnote{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.chartbox svg{display:block;width:100%;height:auto}
+.grid{stroke:var(--line);stroke-width:1}
+.grid.ref{stroke:var(--mark);stroke-dasharray:4 4}
+.ax{fill:var(--muted);font:12px var(--font-mono)}
+.ax.now{fill:var(--mark);font-weight:600}
+.ref-label{fill:var(--mark)}
+.bar-rect{fill:var(--surface2);stroke:var(--line)}
+.bar-rect.done{fill:var(--accent);stroke:var(--accent)}
+.bar-rect.cur{stroke:var(--mark);stroke-width:2}
+
+.weeks{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}
+.wk{flex:none;min-width:58px;padding:7px 8px 6px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font:inherit;cursor:pointer;text-align:center;display:flex;flex-direction:column;gap:1px;align-items:center}
+.wk b{font:700 20px/1 var(--font-display)}
+.wk small{font:400 11px/1.2 var(--font-mono);color:var(--muted)}
+.wk .dot{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--muted);margin-top:3px}
+.wk.part .dot{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
+.wk.full .dot{background:var(--accent);border-color:var(--accent)}
+.wk.now{border-color:var(--mark)}
+.wk.now small{color:var(--mark)}
+.wk[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.wk[aria-current="true"] small{color:var(--accent-fg)}
+.wk[aria-current="true"] .dot{border-color:var(--accent-fg)}
+.wk[aria-current="true"].full .dot{background:var(--accent-fg)}
+.wk:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+
+.whead{display:flex;flex-direction:column;gap:4px}
+.whead h2{margin:0;font:700 30px/1.05 var(--font-display);display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.whead h2 span{font:500 14px/1 var(--font-mono);color:var(--muted)}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{font:500 12px/1 var(--font-mono);padding:4px 7px;border-radius:5px;background:var(--surface2);color:var(--fg)}
+.badge.mark{background:transparent;border:1px solid var(--mark);color:var(--mark)}
+.wline{margin:2px 0 0;color:var(--muted);max-width:62ch}
+
+.sessions{display:flex;flex-direction:column;gap:10px}
+details.sess{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details.sess[open]{border-color:var(--accent)}
+details.sess summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:12px 14px}
+details.sess summary::-webkit-details-marker{display:none}
+.dtag{font:500 12px/1 var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;min-width:2.4em}
+.sname{font:600 20px/1.15 var(--font-display);letter-spacing:.01em}
+.smeta{display:flex;align-items:center;gap:10px;font:400 12px/1 var(--font-mono);color:var(--muted);grid-column:2 / 4}
+.sprog{font:500 13px/1 var(--font-mono);color:var(--fg);white-space:nowrap}
+details.sess.done .sprog{color:var(--accent)}
+details.sess.done .sname::after{content:" ✓";color:var(--accent)}
+.body{padding:2px 14px 14px;border-top:1px solid var(--line)}
+.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.item{display:flex;flex-direction:column;gap:8px;padding:11px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.chk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;cursor:pointer}
+.chk input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--accent);cursor:pointer}
+.txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.trow{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}
+.t{font-weight:600}
+.rx{font:500 14px/1.3 var(--font-mono);color:var(--accent)}
+.note,.hint{font-size:14px;color:var(--muted)}
+.hint{font-family:var(--font-mono);font-size:12px}
+.meta{font-size:13px;line-height:1.4;color:var(--muted)}
+.meta b{font:600 11px/1 var(--font-mono);color:var(--fg);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+.targets{margin:10px 0 4px;font-size:14px;color:var(--muted)}
+.targets b{font:600 11px/1 var(--font-mono);color:var(--fg);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+.item.is-done .t{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.log{margin-left:34px;max-width:260px;width:calc(100% - 34px);font:400 14px/1.2 var(--font-mono);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.log::placeholder{color:var(--muted)}
+.actions{margin-top:8px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.extras{margin-top:14px;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px 14px}
+.extras h3{margin:0 0 4px;font:600 13px/1.2 var(--font-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.link{font:500 13px/1 var(--font-mono);background:none;border:1px solid var(--line);color:var(--fg);padding:8px 11px;border-radius:6px;cursor:pointer}
+.link:hover{border-color:var(--accent)}
+
+details.refbox{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0}
+details.refbox summary{cursor:pointer;padding:13px 14px;font:600 20px/1.1 var(--font-display);letter-spacing:.01em}
+.refin{padding:0 14px 14px;display:grid;gap:18px}
+.refin h3{margin:0 0 6px;font:600 13px/1.2 var(--font-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.refin ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;max-width:68ch}
+.fine{margin:0;color:var(--muted);font-size:13px;max-width:68ch}
+@media (prefers-reduced-motion:no-preference){
+  .bar i{transition:width .3s ease}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="titlebar">
+      <div>
+        <p class="eyebrow">Phalut route · 16 weeks · 9 Nov to early March</p>
+        <h1>Sandakphu Prep</h1>
+      </div>
+      <div class="authbox"><p id="status" class="status" role="status">Loading your ticks…</p></div>
+    </div>
+  </header>
+  <main id="app" class="wrap" style="gap:20px;padding:0"></main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- plan data ---------- */
+var START = new Date(2026, 10, 9);
+var DAY_MS = 86400000;
+var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var EASY = {4:1, 8:1, 12:1};
+var LS_KEY = 'sandakphu-prep-v1';
+
+function weekStart(n){ return new Date(START.getFullYear(), START.getMonth(), START.getDate() + 7*(n-1)); }
+function fmt(d){ return d.getDate() + ' ' + MONTHS[d.getMonth()]; }
+function weekRange(n){
+  var s = weekStart(n);
+  var e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6);
+  return fmt(s) + ' – ' + fmt(e);
+}
+function curWeek(){
+  var now = new Date();
+  var t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var d = Math.round((t0 - START) / DAY_MS);
+  return Math.min(16, Math.max(1, Math.floor(d / 7) + 1));
+}
+function blockOf(n){
+  if (n <= 2) return {name:'Foundation', line:'Build on the movements you already know. Keep every cardio effort easy.'};
+  if (n <= 8) return {name:'Strength', line:'Heavier lifts, with 4 sets on the big three. Add 1–2 kg when every rep feels easy.'};
+  if (n <= 12) return {name:'Endurance + descent', line:'Longer days, slow step-downs, and walking down stairs to protect your knees for trek days 6 and 7.'};
+  if (n <= 15) return {name:'Peak', line:'Dress rehearsals with boots, poles and backpack. Treat the long day like trek day 5.'};
+  return {name:'Taper', line:'Cut volume and keep it light. Your fitness is built, so rest and pack.'};
+}
+
+function rxMain(n){
+  if (EASY[n]) return n === 12 ? '2 × 8–10 · about 80% weight' : '2 × 8 · about 80% weight';
+  if (n <= 2) return '3 × 10';
+  if (n <= 7) return '4 × 6–8';
+  if (n <= 11) return '3–4 × 8–10';
+  if (n <= 15) return '3 × 8';
+  return '2 × 8 · light';
+}
+function rxAcc(n){
+  if (EASY[n]) return n === 12 ? '2 × 10 · about 80% weight' : '2 × 8–10 · about 80% weight';
+  if (n <= 2) return '3 × 10–12';
+  if (n <= 11) return '3 × 8–10';
+  if (n <= 15) return '3 × 8';
+  return '2 × 8 · light';
+}
+function rxCore(n){
+  if (EASY[n] || n <= 2) return '2 × 30 s';
+  if (n <= 15) return '3 × 30–45 s';
+  return '2 × 20 s';
+}
+
+var LD = {
+  1:  {min:40,  main:'5 km baseline test', desc:'Treadmill, walk-jog at a pace you can hold for the whole distance. Write down your time and how it felt.', pack:''},
+  2:  {min:45,  main:'Stairs, 30 floors', desc:'Rounds of 5–8 floors and lift down. Rest when you need to.', pack:''},
+  3:  {min:50,  main:'Stairs, 50 floors', desc:'Climb in rounds of 5–10 floors and take the lift down. Rest when you need to.', pack:''},
+  4:  {min:35,  main:'Easy walk', desc:'Relaxed pace, outdoors or on the treadmill. This is an easy week.', pack:''},
+  5:  {min:60,  main:'Stairs, 65 floors', desc:'Rounds of 10–13 floors and lift down. Rest when you need to.', pack:''},
+  6:  {min:65,  main:'Stairs, 80 floors', desc:'Rounds of 10–15 floors, lift down.', pack:'2 kg'},
+  7:  {min:75,  main:'Outdoor walk, 6–7 km', desc:'Include overpasses, ramps or any hills you can find.', pack:'2 kg'},
+  8:  {min:45,  main:'5 km test', desc:'Same treadmill walk-jog as week 1. Compare your time with the baseline.', pack:''},
+  9:  {min:90,  main:'Stairs, 110 floors', desc:'Walk down 1 round in 4 instead of taking the lift.', pack:'3 kg'},
+  10: {min:105, main:'Walk 9–10 km + stairs', desc:'Mix the outdoor walk and stair rounds in one session.', pack:'3–4 kg'},
+  11: {min:120, main:'Stairs, 150 floors', desc:'Walk down every other round.', pack:'4 kg'},
+  12: {min:60,  main:'Easy walk', desc:'Relaxed pace. This is an easy week.', pack:''},
+  13: {min:135, main:'75 min walk + 60 min stairs', desc:'Trek boots and poles. Walk down every other stair round.', pack:'4–5 kg'},
+  14: {min:180, main:'About 15 km mixed walk and stairs', desc:'Trek boots and poles. Walk down 3 stair rounds in 4.', pack:'5 kg'},
+  15: {min:225, main:'About 18–20 km mixed walk and stairs', desc:'Trek boots and poles. Walk down every round. Treat it as a rehearsal for trek day 5.', pack:'5–6 kg'},
+  16: {min:30,  main:'Easy walk', desc:'Relaxed, early in the week. Then rest until you travel.', pack:''}
+};
+var LD_PLACE = {1:'Gym treadmill', 2:'Your building', 3:'Your building', 4:'Anywhere', 5:'Your building', 6:'Your building', 7:'Outdoors', 8:'Gym treadmill', 9:'Your building', 10:'Outdoors + your building', 11:'Your building', 12:'Anywhere', 13:'Outdoors + your building', 14:'Outdoors + your building', 15:'Outdoors + your building', 16:'Anywhere'};
+function minsLabel(m){
+  if (m < 120) return m + ' min';
+  var h = Math.floor(m / 60), r = m % 60;
+  return h + ' h' + (r ? ' ' + r + ' min' : '');
+}
+
+function cardioC(n){
+  if (n === 14) return {t:'Cardio: 5 km test (walk-jog)', rx:'Aim for 45 min or less', note:'Treadmill, steady pace. Compare with weeks 1 and 8. Under 40 min is the stretch goal.'};
+  if (n === 16) return {t:'Easy walk', rx:'20 min', note:'Relaxed pace. Nothing more this week.'};
+  if (n <= 3)  return {t:'Cardio: walk-jog intervals', rx:'6 × (1 min jog, 2 min walk)', note:'Jog slowly. If your knees complain, walk briskly on a 3–5% incline instead.'};
+  if (n === 4) return {t:'Cardio: walk-jog intervals', rx:'4 × (1 min jog, 2 min walk)', note:'Easy week.'};
+  if (n <= 7)  return {t:'Cardio: walk-jog intervals', rx:'6 × (3 min jog, 1.5 min walk)', note:'Jog at a pace where you could still say a sentence.'};
+  if (n === 8) return {t:'Cardio: walk-jog intervals', rx:'4 × (3 min jog, 1.5 min walk)', note:'Easy week.'};
+  if (n <= 11) return {t:'Cardio: easy jog', rx:'20 min continuous', note:'Walk whenever you need to, then start again.'};
+  if (n === 12) return {t:'Cardio: easy jog', rx:'12 min continuous', note:'Easy week.'};
+  return {t:'Cardio: steady easy jog', rx:'25 min', note:'Walk breaks are fine. Keep it conversational.'};
+}
+
+var WU = {t:'Warm-up', rx:'8 min', note:'Easy bike or walk, leg swings, bodyweight squats, glute bridges.'};
+var WUC = {t:'Warm-up', rx:'8 min', note:'Easy traversing low on the wall, arm circles, leg swings, hip openers, wrist rolls.'};
+var CD = {t:'Cool-down', rx:'5 min', note:'Stretch quads, calves, hips, glutes and chest, about 45 seconds each.'};
+
+var INFO = {
+  'Easy climbing': ['Forearms and grip, lats, biceps, shoulders, core and legs. Trains balance and footwork for rocky trail.', 'Auto-belay routes, or traverses along a low bouldering wall'],
+  'Dead hang from a bar or big hold': ['Forearms and grip, lats and the small muscles around your shoulders. Helps your shoulders carry a pack.', 'Hang from a pull-up bar at the gym, or hold a towel over a bar'],
+  'Push-ups on the mat (knees if needed)': ['Chest, front shoulders, triceps and core.', 'Incline push-ups on a bench, dumbbell bench press, chest press machine'],
+  'Push-up (knees or bench if needed)': ['Chest, front shoulders, triceps and core.', 'Incline push-ups on a bench, dumbbell bench press, chest press machine'],
+  'Plank': ['Abs, obliques, shoulders and glutes. A stable core protects your back under a pack.', 'Dead bug, bird dog, Pallof press on a cable, ab wheel from your knees'],
+  'Hanging knee raise or dead bug': ['Lower abs, hip flexors and grip.', 'Knee raise on a captain chair, reverse crunch, lying leg raise'],
+  'Goblet squat': ['Quads, glutes, inner thighs and core. Powers you up steep steps.', 'Leg press, Smith machine squat, hack squat machine, dumbbell squat to a box'],
+  'Lat pulldown or assisted pull-up': ['Lats, biceps, mid-back and rear shoulders. Keeps you upright under a pack.', 'Assisted pull-up machine, band-assisted pull-up, seated cable row, high-row machine'],
+  'Romanian deadlift': ['Hamstrings, glutes, lower back and grip. Drives you uphill and protects your back.', 'Barbell or Smith machine Romanian deadlift, cable pull-through, 45-degree back extension, kettlebell deadlift'],
+  'Split squat or step-up (30–40 cm box)': ['Quads, glutes and the small hip muscles that keep your knees steady.', 'Reverse lunge, walking lunge, Smith machine split squat, single-leg leg press'],
+  'Step-up (30–40 cm box)': ['Quads, glutes and the small hip muscles that keep your knees steady.', 'Reverse lunge, walking lunge, Smith machine split squat, single-leg leg press'],
+  'Hip thrust (shoulders on a bench)': ['Glutes and hamstrings. Strong glutes take load off your knees on climbs and descents.', 'Glute bridge on the floor, hip thrust machine, cable pull-through, dumbbell glute bridge'],
+  'Slow step-down from the box': ['Quads (while lowering), glutes and knee stabilisers. Trains the braking muscles for the long descents on trek days 6 and 7.', 'Slow squat to a bench lowering for 4 seconds, slow stair descent, leg extension machine lowering for 4 seconds'],
+  'Standing calf raise': ['Calves and Achilles tendon. Your calves work on every step of the trek.', 'Seated calf raise machine, calf raise on a leg press, Smith machine calf raise, raise on a stair edge'],
+  'Dead bug or plank': ['Deep abs, obliques and lower back stabilisers.', 'Bird dog, Pallof press, ab wheel from your knees'],
+  'Loaded step-ups': ['Quads, glutes, calves and balance. The closest gym move to climbing steps with a pack.', 'Step-ups on a plyo box, Smith machine step-ups, weighted lunges, leg press'],
+  'Dumbbell deadlift': ['Glutes, hamstrings, quads, lower back, upper back and grip.', 'Trap bar deadlift, kettlebell deadlift, light barbell deadlift, cable pull-through'],
+  'Dumbbell shoulder press': ['Shoulders, triceps and upper chest. Strong shoulders make a pack easier to carry.', 'Shoulder press machine, kettlebell press, landmine press, seated barbell press'],
+  'One-arm dumbbell row': ['Lats, mid-back, rear shoulders and biceps. Holds your shoulders back under a pack.', 'Seated cable row, chest-supported row machine, T-bar row, band row'],
+  'Farmer carry': ['Grip, forearms, upper traps, core and legs. Trains you to stay tall while carrying weight.', 'Suitcase carry with one dumbbell, trap bar carry, kettlebell carry, walking with a loaded backpack'],
+  'Side plank': ['Obliques, side glutes and shoulder stabilisers. Keeps your hips level on uneven trail.', 'Side plank from your knees, Pallof press, suitcase carry'],
+  'Backpack on': ['Upper back, traps, core and glutes. Gets your body used to carrying load.', 'A weighted vest, or water bottles in your pack'],
+  'Easy walk': ['Calves, quads, glutes, heart and lungs.', 'Cycling, elliptical or an easy treadmill walk'],
+  'Seated or dumbbell row': ['Lats, mid-back, rear shoulders and biceps. Holds your shoulders back under a pack.', 'One-arm dumbbell row, chest-supported row machine, T-bar row, band row'],
+  'Dumbbell bench press or push-ups': ['Chest, front shoulders and triceps.', 'Chest press machine, incline push-ups on a bench, cable chest press'],
+  'Easy incline walk': ['Calves, quads, glutes, heart and lungs.', 'Stair climber, bike or elliptical at an easy pace'],
+  'Easy rest-day walk': ['Calves, quads, glutes, heart and lungs. Easy aerobic volume that builds your base without tiring you out.', 'Cycling, elliptical, an easy treadmill walk or a swim'],
+  'Friday walk with light backpack': ['Calves, quads, glutes, upper back, core, heart and lungs. Practises walking on tired legs with a pack.', 'Incline treadmill at 3–5% with a light backpack, or stairs at an easy pace'],
+  'Leg curl machine': ['Hamstrings and calves. Strong hamstrings steady your knees on climbs and descents.', 'Seated or lying leg curl machine, stability ball leg curl, slider leg curl, an extra set of Romanian deadlifts'],
+  'Pallof press': ['Obliques, deep abs and hips. Keeps you steady on uneven trail.', 'Band Pallof press anchored to a rack, cable press held still, suitcase carry']
+};
+var INFO_CARDIO = ['Heart and lungs, plus calves, quads and glutes. Builds the engine for long days.', 'Incline power-walk, bike, elliptical, stair climber or rowing machine at the same effort'];
+var INFO_LONG = ['Quads, glutes, calves, hip stabilisers, heart and lungs. The main trek-specific training.', 'Stair climber, incline treadmill at 8–12%, step-ups on a box with a backpack, outdoor hill or ramp walking'];
+function infoFor(t){
+  if (INFO[t]) return INFO[t];
+  if (/^Cardio:/.test(t)) return INFO_CARDIO;
+  if (/^(Stairs|Incline|Outdoor|Walk|About|90 min|5 km)/.test(t)) return INFO_LONG;
+  return null;
+}
+var SESS_WORKS = {
+  A:'Forearms and grip, lats, shoulders, chest, core, plus leg balance and footwork',
+  B:'Quads, glutes, hamstrings, calves and core',
+  C:'Quads, glutes, hamstrings, back, shoulders, grip, core, heart and lungs',
+  D:'Quads, glutes, calves, hip stabilisers, heart and lungs',
+  a:'Lats, mid-back, chest, shoulders, triceps, biceps, core, heart and lungs'
+};
+function worksFor(s){
+  if (s.name === 'Light strength') return 'Quads, glutes, hamstrings and core, kept light so you stay fresh';
+  if (s.id === 'C' && s.name === 'Easy walk') return 'Calves, quads, glutes, heart and lungs, kept easy';
+  return SESS_WORKS[s.id] || '';
+}
+
+var cache = {};
+function buildSessions(n){
+  if (cache[n]) return cache[n];
+  var M = rxMain(n), A = rxAcc(n), C = rxCore(n), taper = n === 16, out = [];
+  var BW = (EASY[n] || n <= 2 || n === 16) ? '2 × 8' : '3 × 8–10';
+
+  if (!taper){
+    out.push({id:'A', day:'Mon', name:'Climbing gym', place:'Climbing gym', time:'60 min', items:[
+      WUC,
+      {t:'Easy climbing', rx:'40–45 min', note:'Easy to moderate routes and traverses. Focus on footwork and pushing with your legs. Rest between climbs and keep the effort low.'},
+      {t:'Dead hang from a bar or big hold', rx:'3 × 20–30 s', note:'Keep your feet on the floor or a step to take some weight off. Builds grip and shoulder strength.'},
+      {t:'Push-ups on the mat (knees if needed)', rx:BW, log:'Variation'},
+      {t:'Plank', rx:C, note:'Hold 30–45 s.'},
+      {t:'Hanging knee raise or dead bug', rx:BW, note:'Dead bug is 8 reps each side.'},
+      CD
+    ]});
+  }
+
+  if (!taper){
+    var bItems = [
+      WU,
+      {t:'Goblet squat', rx:M, log:'Weight used', hint:'the weight you already use, plus 1–2 kg when every rep is easy. From week 3 a barbell squat to a box is an option.'},
+      {t:'Romanian deadlift', rx:M, log:'Weight used', hint:'6–8 kg in each hand'},
+      {t:'Split squat or step-up (30–40 cm box)', rx:A, note:'Each leg.', log:'Weight used', hint:'bodyweight, then 4–6 kg dumbbells from week 7'},
+      {t:'Hip thrust (shoulders on a bench)', rx:M, log:'Weight used', hint:'bodyweight or about 20 kg'}
+    ];
+    if (n >= 3){
+      bItems.push({t:'Slow step-down from the box', rx:(EASY[n] ? '2 × 8' : '3 × 8') + ' · ' + (n >= 9 ? '4' : '3') + ' seconds down', note:'Each leg. Lower yourself slowly with your knee over your toes.', log:'Box height or weight'});
+    }
+    bItems.push({t:'Leg curl machine', rx:A, log:'Weight used', hint:'10–15 kg on the machine'});
+    bItems.push({t:'Standing calf raise', rx:EASY[n] ? '2 × 15' : '3 × 15', note:'Slow, full range.', hint:'bodyweight, then hold 6–8 kg'});
+    bItems.push({t:'Dead bug or plank', rx:C, note:'Plank for 30–45 s, or dead bug for 8 reps each side.'});
+    bItems.push(CD);
+    out.push({id:'B', day:'Tue', name:'Lower body', place:'Gym', time:'60 min', items:bItems});
+  } else {
+    out.push({id:'B', day:'Tue', name:'Light strength', place:'Gym', time:'40 min', items:[
+      WU,
+      {t:'Goblet squat', rx:M, log:'Weight used', hint:'about 70% of your usual weight'},
+      {t:'Romanian deadlift', rx:M, log:'Weight used', hint:'about 70% of your usual weight'},
+      {t:'Step-up (30–40 cm box)', rx:A, note:'Each leg, bodyweight.'},
+      {t:'Plank', rx:C},
+      CD
+    ]});
+  }
+
+  if (!taper){
+    var cc = cardioC(n);
+    out.push({id:'C', day:'Thu', name:'Full body + walk-jog', place:'Gym', time:(n === 14 ? '65 min' : '60 min'), items:[
+      WU,
+      {t:'Loaded step-ups', rx:A, note:'Each leg. Hold dumbbells, and from week 13 wear your backpack instead.', log:'Weight used', hint:'4–6 kg dumbbells'},
+      {t:'Dumbbell deadlift', rx:M, log:'Weight used', hint:'6–8 kg in each hand'},
+      {t:'Dumbbell shoulder press', rx:A, note:'Seated or standing.', log:'Weight used', hint:'3–5 kg each hand'},
+      {t:'One-arm dumbbell row', rx:A, note:'Each side.', log:'Weight used', hint:'5–8 kg'},
+      {t:'Farmer carry', rx:'3 × 30 m', log:'Weight used', hint:'8–10 kg in each hand'},
+      {t:'Side plank', rx:'2 × 20–30 s', note:'Each side.'},
+      {t:'Pallof press', rx:'2 × 10', note:'Each side. Cable or band at chest height. Press straight out and resist the twist.', hint:'a light cable or band'},
+      cc,
+      CD
+    ]});
+  } else {
+    var c16 = cardioC(16);
+    out.push({id:'C', day:'Thu', name:'Easy walk', place:'Anywhere', time:'20 min', items:[c16]});
+  }
+
+  var ld = LD[n];
+  var dItems = [
+    {t:'Warm-up', rx:'5 min', note:'Walk easily and loosen your hips and ankles.'},
+    {t:ld.main, rx:minsLabel(ld.min), note:ld.desc, log:'Floors, km or time'}
+  ];
+  if (ld.pack) dItems.push({t:'Backpack on', rx:ld.pack, note:'Snug fit, hip belt on. Drop weight if knees, hips or back complain.'});
+  dItems.push({t:'Cool-down', rx:'5 min', note:'Stretch calves, quads, hips and glutes.'});
+  out.push({id:'D', day:'Sat', name:'Long day: ' + ld.main, place:LD_PLACE[n], time:minsLabel(ld.min), items:dItems});
+
+  cache[n] = out;
+  return out;
+}
+
+function buildAlt(n){
+  var A = rxAcc(n), C = rxCore(n);
+  var BW = (EASY[n] || n <= 2) ? '2 × 8' : '3 × 8–10';
+  return {id:'a', day:'Mon', name:'Gym upper body + core', place:'Gym', time:'60 min', items:[
+    WU,
+    {t:'Lat pulldown or assisted pull-up', rx:A, log:'Weight used', hint:'20–25 kg on the machine'},
+    {t:'Seated or dumbbell row', rx:A, log:'Weight used', hint:'5–8 kg each hand, or 15–20 kg on the machine'},
+    {t:'Dumbbell bench press or push-ups', rx:A, log:'Weight or variation', hint:'4–6 kg dumbbells, or push-ups on a bench or your knees'},
+    {t:'Dumbbell shoulder press', rx:A, note:'Seated or standing.', log:'Weight used', hint:'3–5 kg each hand'},
+    {t:'Plank', rx:C, note:'Hold 30–45 s.'},
+    {t:'Hanging knee raise or dead bug', rx:BW, note:'Dead bug is 8 reps each side.'},
+    {t:'Easy incline walk', rx:'15 min', note:'5–8% incline at a conversational pace.'},
+    CD
+  ]};
+}
+
+function sessions(n){
+  var base = buildSessions(n);
+  if (!state.alt || !state.alt[n]) return base;
+  var alt = buildAlt(n);
+  return base.map(function(s){ return s.id === 'A' ? alt : s; });
+}
+
+function extras(n){
+  var out = [];
+  if (n >= 5 && n <= 15){
+    out.push({t:'Easy rest-day walk', rx:EASY[n] ? '30 min' : '30–45 min', note:'Wednesday or Sunday, outdoors or on the treadmill, at a pace where you can talk. ' + (n >= 9 ? 'Recommended.' : 'Optional.')});
+  }
+  if (n >= 13 && n <= 15){
+    out.push({t:'Friday walk with light backpack', rx:'60–90 min', note:'Easy pace with 3–4 kg, the day before your long Saturday. It practises walking on tired legs. Recommended.'});
+  }
+  return out;
+}
+function extrasHTML(n){
+  var ex = extras(n);
+  if (!ex.length) return '';
+  var h = '<div class="extras"><h3>' + (n >= 9 ? 'Extra walks (recommended)' : 'Optional extras') + '</h3><ul class="items">';
+  for (var i = 0; i < ex.length; i++) h += itemHTML(n, 'X', i, ex[i]);
+  return h + '</ul></div>';
+}
+
+/* ---------- state ---------- */
+var state = {checks:{}, logs:{}, alt:{}};
+var sel = curWeek();
+var NOW = curWeek();
+var openSet = {};
+var refOpen = false;
+var lastFocus = null;
+var scrollChip = true;
+
+function sk(n, id){ return 'w' + n + '_' + id; }
+function itemKey(n, id, i){ return 'w' + n + '_' + id + '_' + i; }
+function sessProg(n, s){
+  var d = 0, i;
+  for (i = 0; i < s.items.length; i++) if (state.checks[itemKey(n, s.id, i)]) d++;
+  return {done:d, total:s.items.length};
+}
+function sessDone(n, s){ var p = sessProg(n, s); return p.total > 0 && p.done === p.total; }
+function weekProg(n){
+  var ss = sessions(n), d = 0, k;
+  for (k = 0; k < ss.length; k++) if (sessDone(n, ss[k])) d++;
+  return {done:d, total:ss.length};
+}
+function overall(){
+  var d = 0, t = 0, n;
+  for (n = 1; n <= 16; n++){ var w = weekProg(n); d += w.done; t += w.total; }
+  return {done:d, total:t};
+}
+function longDone(n){
+  var ss = sessions(n);
+  for (var i = 0; i < ss.length; i++) if (ss[i].id === 'D') return sessDone(n, ss[i]);
+  return false;
+}
+function resetOpen(){
+  openSet = {};
+  var ss = sessions(sel), i;
+  for (i = 0; i < ss.length; i++){
+    if (!sessDone(sel, ss[i])){ openSet[sk(sel, ss[i].id)] = true; return; }
+  }
+}
+
+function canon(s){
+  var o = {checks:{}, logs:{}, alt:{}};
+  Object.keys(s.checks || {}).sort().forEach(function(k){ o.checks[k] = true; });
+  Object.keys(s.logs || {}).sort().forEach(function(k){ o.logs[k] = s.logs[k]; });
+  Object.keys(s.alt || {}).sort().forEach(function(k){ o.alt[k] = true; });
+  return JSON.stringify(o);
+}
+function hasData(s){ return Object.keys(s.checks || {}).length > 0 || Object.keys(s.logs || {}).length > 0 || Object.keys(s.alt || {}).length > 0; }
+
+/* ---------- storage ---------- */
+function loadLocal(){
+  try {
+    var r = localStorage.getItem(LS_KEY);
+    if (r){
+      var d = JSON.parse(r);
+      if (d && typeof d === 'object'){ state.checks = d.checks || {}; state.logs = d.logs || {}; state.alt = d.alt || {}; }
+    }
+  } catch (e) {}
+}
+function mirrorLocal(){
+  try { localStorage.setItem(LS_KEY, canon(state)); } catch (e) {}
+}
+
+var statusEl = null;
+function setStatus(kind){
+  if (!statusEl) return;
+  var map = {
+    connecting:['Syncing…',''],
+    saving:['Saving…',''],
+    saved:['Synced','ok'],
+    local:['Saved on this device only','warn'],
+    setup:['Cloud sync not set up yet. Ticks stay on this device.','warn'],
+    signin:['Sign in to sync your progress','warn'],
+    autherr:['Sign-in failed. Try again.','warn'],
+    offline:['Cannot reach your account yet. Ticks stay on this device.','warn']
+  };
+  var m = map[kind] || map.local;
+  statusEl.textContent = m[0];
+  statusEl.className = 'status ' + m[1];
+}
+
+var ref = null, dirty = false, writing = false, timer = null, definitive = false, offlineTimer = null;
+function scheduleRemote(){
+  if (!ref) return;
+  dirty = true;
+  setStatus('saving');
+  clearTimeout(timer);
+  timer = setTimeout(flush, 500);
+}
+function flush(){
+  if (writing || !dirty || !ref) return;
+  writing = true;
+  dirty = false;
+  var body = JSON.parse(canon(state));
+  body.updated = Date.now();
+  ref.set(body).then(function(){
+    writing = false;
+    setStatus(dirty ? 'saving' : 'saved');
+    if (dirty) flush();
+  }, function(){
+    writing = false;
+    setStatus('local');
+  });
+}
+function commit(rerender){
+  mirrorLocal();
+  scheduleRemote();
+  if (rerender) render();
+}
+
+function initRemote(){
+  var cfg = window.FIREBASE_CONFIG, tid = window.TRACKER_ID;
+  if (!window.firebase || !cfg || !cfg.apiKey || /PASTE_/.test(cfg.apiKey) || !tid){ setStatus('setup'); return; }
+  var db;
+  try {
+    window.firebase.initializeApp(cfg);
+    db = window.firebase.firestore();
+    try { db.enablePersistence({synchronizeTabs:true}).catch(function(){}); } catch (e) {}
+  } catch (e) { setStatus('local'); return; }
+  setStatus('connecting');
+  ref = db.collection('trackers').doc(tid);
+  offlineTimer = setTimeout(function(){ if (!definitive) setStatus('offline'); }, 10000);
+  ref.onSnapshot(function(snap){
+    var fromCache = snap.metadata && snap.metadata.fromCache;
+    if (!fromCache){ definitive = true; clearTimeout(offlineTimer); }
+    if (snap.exists){
+      var d = snap.data() || {};
+      var next = {checks:d.checks || {}, logs:d.logs || {}, alt:d.alt || {}};
+      if (canon(next) !== canon(state) && !dirty && !writing){
+        state = next;
+        mirrorLocal();
+        render();
+      }
+      if (definitive && !dirty && !writing) setStatus('saved');
+    } else if (definitive){
+      if (hasData(state)){ dirty = true; flush(); } else { setStatus('saved'); }
+    }
+  }, function(){ setStatus('local'); });
+}
+
+/* ---------- rendering ---------- */
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function chartHTML(){
+  var W = 560, H = 200, L = 44, R = 552, T = 16, B = 170, MAXV = 420;
+  var slot = (R - L) / 16, bw = 22;
+  function y(v){ return B - (v / MAXV) * (B - T); }
+  var g = '', n;
+  [[0,'0'],[120,'2 h'],[240,'4 h'],[420,'7 h']].forEach(function(p){
+    var yy = y(p[0]).toFixed(1);
+    g += '<line x1="' + L + '" x2="' + R + '" y1="' + yy + '" y2="' + yy + '" class="grid' + (p[0] === 420 ? ' ref' : '') + '"/>' +
+         '<text x="' + (L - 6) + '" y="' + (y(p[0]) + 4).toFixed(1) + '" text-anchor="end" class="ax">' + p[1] + '</text>';
+  });
+  for (n = 1; n <= 16; n++){
+    var mins = LD[n].min;
+    var x = L + (n - 1) * slot + (slot - bw) / 2;
+    var cls = 'bar-rect' + (longDone(n) ? ' done' : '') + (n === NOW ? ' cur' : '');
+    g += '<rect x="' + x.toFixed(1) + '" y="' + y(mins).toFixed(1) + '" width="' + bw + '" height="' + (B - y(mins)).toFixed(1) + '" rx="2" class="' + cls + '"><title>Week ' + n + ': ' + minsLabel(mins) + '</title></rect>';
+    g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="189" text-anchor="middle" class="ax' + (n === NOW ? ' now' : '') + '">' + n + '</text>';
+  }
+  g += '<text x="' + (L + 6) + '" y="' + (y(420) + 16).toFixed(1) + '" class="ax ref-label">Trek day 5: about 7 h</text>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart of the planned long-day length for each of 16 weeks, rising from 40 minutes to 3 hours 45 minutes, against a dashed line at about 7 hours for trek day 5.">' + g + '</svg>';
+}
+
+function summaryHTML(){
+  var o = overall();
+  var pct = o.total ? Math.round(100 * o.done / o.total) : 0;
+  return '<section class="panel summary" aria-label="Progress">' +
+    '<div><div class="big">' + o.done + '<span>/' + o.total + '</span></div>' +
+    '<p class="plabel">sessions done</p>' +
+    '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + o.total + '" aria-valuenow="' + o.done + '"><i style="width:' + pct + '%"></i></div></div>' +
+    '<div class="chartbox"><p class="charttitle">Long day, week by week</p>' + chartHTML() +
+    '<p class="chartnote">Filled bars are long days you have finished. Your longest session reaches more than half of trek day 5.</p></div>' +
+    '</section>';
+}
+
+function chipsHTML(){
+  var h = '<nav class="weeks" aria-label="Weeks">', n;
+  for (n = 1; n <= 16; n++){
+    var w = weekProg(n);
+    var st = w.done === w.total ? 'full' : (w.done > 0 ? 'part' : '');
+    var cls = 'wk ' + st + (n === NOW ? ' now' : '');
+    h += '<button type="button" class="' + cls + '" data-w="' + n + '"' + (n === sel ? ' aria-current="true"' : '') + ' aria-label="Week ' + n + ', ' + weekRange(n) + ', ' + w.done + ' of ' + w.total + ' sessions done">' +
+         '<b>' + n + '</b><small>' + fmt(weekStart(n)) + '</small><span class="dot"></span></button>';
+  }
+  return h + '</nav>';
+}
+
+function itemHTML(n, sid, i, it){
+  var k = itemKey(n, sid, i);
+  var done = !!state.checks[k];
+  var h = '<li class="item' + (done ? ' is-done' : '') + '">' +
+    '<label class="chk" for="c_' + k + '"><input type="checkbox" id="c_' + k + '" data-k="' + k + '"' + (done ? ' checked' : '') + '>' +
+    '<span class="txt"><span class="trow"><span class="t">' + esc(it.t) + '</span>' + (it.rx ? '<span class="rx">' + esc(it.rx) + '</span>' : '') + '</span>' +
+    (it.note ? '<span class="note">' + esc(it.note) + '</span>' : '') +
+    (it.hint ? '<span class="hint">Guide: ' + esc(it.hint) + '</span>' : '') +
+    (function(){ var inf = infoFor(it.t); return inf ? '<span class="meta"><b>Works</b>' + esc(inf[0]) + '</span><span class="meta"><b>Swap for</b>' + esc(inf[1]) + '</span>' : ''; })() +
+    '</span></label>';
+  if (it.log){
+    h += '<input type="text" class="log" id="l_' + k + '" data-k="' + k + '" maxlength="80" placeholder="' + esc(it.log) + '" aria-label="' + esc(it.t + ': ' + it.log) + '" value="' + esc(state.logs[k] || '') + '">';
+  }
+  return h + '</li>';
+}
+
+function sessionHTML(n, s){
+  var key = sk(n, s.id);
+  var p = sessProg(n, s);
+  var done = p.total > 0 && p.done === p.total;
+  var allTicked = done;
+  var h = '<details class="sess' + (done ? ' done' : '') + '" data-sk="' + key + '"' + (openSet[key] ? ' open' : '') + '>' +
+    '<summary><span class="dtag">' + s.day + '</span><span class="sname">' + esc(s.name) + '</span><span class="sprog">' + p.done + '/' + p.total + '</span>' +
+    '<span class="smeta"><span>' + esc(s.time) + '</span>' + (s.place ? '<span>·</span><span>' + esc(s.place) + '</span>' : '') + '</span></summary>' +
+    '<div class="body"><p class="targets"><b>Targets</b>' + esc(worksFor(s)) + '</p><ul class="items">';
+  for (var i = 0; i < s.items.length; i++) h += itemHTML(n, s.id, i, s.items[i]);
+  h += '</ul><div class="actions">' + ((s.id === 'A' || s.id === 'a') ? '<button type="button" class="link" data-alt="' + n + '">' + (s.id === 'A' ? 'No climbing today? Use the gym session' : 'Back to the climbing session') + '</button>' : '') + '<button type="button" class="link" data-all="' + key + '">' + (allTicked ? 'Clear all' : 'Tick all') + '</button></div></div></details>';
+  return h;
+}
+
+function weekHTML(n){
+  var b = blockOf(n), ss = sessions(n), wp = weekProg(n);
+  var badges = '<span class="badge">' + b.name + '</span>';
+  if (EASY[n]) badges += '<span class="badge mark">Easy week</span>';
+  if (n === 16) badges += '<span class="badge mark">Trek starts soon</span>';
+  if (n === NOW) badges += '<span class="badge mark">This week</span>';
+  badges += '<span class="badge">' + wp.done + ' of ' + wp.total + ' sessions</span>';
+  var h = '<section aria-label="Week ' + n + '"><div class="whead"><h2>Week ' + n + '<span>' + weekRange(n) + '</span></h2>' +
+    '<div class="badges">' + badges + '</div>' +
+    '<p class="wline">' + esc(b.line) + (n <= 2 ? ' You already have 2 weeks of lifting behind you, so start from the weights you use now.' : '') + (EASY[n] ? ' Cut sets to 2 and use about 80% of your weights.' : '') + '</p></div>' +
+    '<div class="sessions" style="margin-top:14px">';
+  for (var i = 0; i < ss.length; i++) h += sessionHTML(n, ss[i]);
+  return h + '</div>' + extrasHTML(n) + '</section>';
+}
+
+function refHTML(){
+  return '<details class="refbox" id="refbox"' + (refOpen ? ' open' : '') + '><summary>Rules, targets and trek days</summary><div class="refin">' +
+    '<div><h3>Rules</h3><ul>' +
+    '<li>Keep long days and cardio at a pace where you can talk in full sentences.</li>' +
+    '<li>You had 2 weeks of lifting before this plan started, so begin from the weights you use now, not from scratch.</li>' +
+    '<li>If your gym does not have a machine or weight, use a swap listed under that exercise and keep the same sets and reps.</li>' +
+    '<li>Add 1–2 kg when you hit the top of the rep range on every set with about 2 reps left.</li>' +
+    '<li>Never carry more than 6 kg in your backpack, about 10% of your body weight.</li>' +
+    '<li>Soreness for 1–3 days is normal. Sharp or joint pain means stop and lower the load.</li>' +
+    '<li>If you miss a week, repeat the previous week. Do not double up.</li>' +
+    '<li>Do not skip easy weeks (4, 8 and 12). That is when your body adapts.</li>' +
+    '<li>Aim for 80–100 g of protein a day, 2–3 L of water and 7–8 hours of sleep. If you are in a calorie deficit, move to maintenance from week 9.</li>' +
+    '<li>From week 13, train in your trek boots, with poles and the layers you will wear.</li></ul></div>' +
+    '<div><h3>Targets by week 15</h3><ul>' +
+    '<li>Goblet squat: 16–20 kg × 10</li>' +
+    '<li>Dumbbell Romanian deadlift: 12–16 kg each hand × 10</li>' +
+    '<li>Loaded step-up: 6–8 kg each hand × 10 per leg</li>' +
+    '<li>Hip thrust: 40–50 kg × 10</li>' +
+    '<li>Lat pulldown: 35–40 kg × 10</li>' +
+    '<li>Push-ups on the floor: 8–10</li>' +
+    '<li>5 km walk-jog: 45 minutes or less, with 40 as a stretch goal</li></ul></div>' +
+    '<div><h3>Trek days on the Phalut route</h3><ul>' +
+    '<li>Day 2, Dhotrey to Tumling: about 6 km, 3 h, about 1,500 ft up</li>' +
+    '<li>Day 3, Tumling to Kalipokhri: about 13–14 km, 5 h, with a steep climb after Gairibas</li>' +
+    '<li>Day 4, Kalipokhri to Sandakphu: about 6–7 km, 4 h, steep and above the tree line, up to about 11,930 ft</li>' +
+    '<li>Day 5, Sandakphu to Phalut: about 21 km, 7–8 h, the longest day</li>' +
+    '<li>Day 6, Phalut to Gorkhey: about 10–15 km, about 6 h, long descent then a steep climb into the village</li>' +
+    '<li>Day 7, Gorkhey to Srikhola: about 13–16 km, about 5 h, long steady descent</li></ul></div>' +
+    '<p class="fine">Distances and times come from published itineraries and differ between sources and operators, so confirm yours. Sandakphu is about 3,600 m, and gym fitness cannot replace gradual acclimatisation. See your doctor beforehand, ask about altitude medication, and descend if you get a worsening headache, nausea or dizziness.</p>' +
+    '</div></details>';
+}
+
+var app = null;
+function render(){
+  app.innerHTML = summaryHTML() + chipsHTML() + weekHTML(sel) + refHTML();
+  if (scrollChip){
+    var cur = app.querySelector('.wk[aria-current="true"]');
+    if (cur && cur.scrollIntoView){ try { cur.scrollIntoView({inline:'center', block:'nearest'}); } catch (e) {} }
+    scrollChip = false;
+  }
+  if (lastFocus){
+    var el = document.getElementById(lastFocus);
+    if (el && el.focus){ try { el.focus({preventScroll:true}); } catch (e) { el.focus(); } }
+    lastFocus = null;
+  }
+}
+
+function toggleAll(key){
+  var m = /^w(\d+)_([A-Da])$/.exec(key);
+  if (!m) return;
+  var n = +m[1], s = null, ss = sessions(n), i;
+  for (i = 0; i < ss.length; i++) if (ss[i].id === m[2]) s = ss[i];
+  if (!s) return;
+  var all = sessDone(n, s);
+  for (i = 0; i < s.items.length; i++){
+    var k = itemKey(n, s.id, i);
+    if (all) delete state.checks[k]; else state.checks[k] = true;
+  }
+  openSet[key] = true;
+  commit(true);
+}
+
+function wire(){
+  app.addEventListener('change', function(e){
+    var t = e.target;
+    if (!t || !t.matches) return;
+    if (t.matches('input[type="checkbox"][data-k]')){
+      lastFocus = t.id;
+      if (t.checked) state.checks[t.dataset.k] = true; else delete state.checks[t.dataset.k];
+      commit(true);
+    } else if (t.matches('input.log[data-k]')){
+      var v = t.value.trim().slice(0, 80);
+      if (v) state.logs[t.dataset.k] = v; else delete state.logs[t.dataset.k];
+      commit(false);
+    }
+  });
+  app.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b) return;
+    if (b.dataset.w){
+      sel = +b.dataset.w;
+      scrollChip = true;
+      resetOpen();
+      render();
+    } else if (b.dataset.all){
+      toggleAll(b.dataset.all);
+    } else if (b.dataset.alt){
+      var wn = b.dataset.alt;
+      if (state.alt[wn]) delete state.alt[wn]; else state.alt[wn] = true;
+      openSet[sk(+wn, state.alt[wn] ? 'a' : 'A')] = true;
+      commit(true);
+    }
+  });
+  app.addEventListener('toggle', function(e){
+    var d = e.target;
+    if (!d || !d.matches) return;
+    if (d.matches('details.sess')){
+      if (d.open) openSet[d.dataset.sk] = true; else delete openSet[d.dataset.sk];
+    } else if (d.matches('details.refbox')){
+      refOpen = d.open;
+    }
+  }, true);
+}
+
+app = document.getElementById('app');
+statusEl = document.getElementById('status');
+loadLocal();
+resetOpen();
+wire();
+render();
+initRemote();
+})();
+</script>
+
+
+</body></html>
